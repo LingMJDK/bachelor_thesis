@@ -92,5 +92,8 @@ target/
 # Exclude trained models
 /models/
 
+# Exclude personal notes
+/personal_notes/
+
 # exclude data from source control by default
 # /data/
