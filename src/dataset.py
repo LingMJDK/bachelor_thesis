@@ -1,12 +1,20 @@
 import os
 import requests
-from config import ENWIK8_PATH
-from utils.util import enwik8_string
 import random
 import textwrap
 from typing import List, Tuple, Generator, Dict
 import torch
-from data_rnn import i2w
+
+try:
+    from src.config import ENWIK8_PATH
+    from src.utils.util import enwik8_string
+    from src.utils.data_rnn import load_imdb, get_i2w
+    i2w = get_i2w()
+except ImportError:
+    from config import ENWIK8_PATH
+    from utils.util import enwik8_string
+    from utils.data_rnn import load_imdb, get_i2w
+    i2w = get_i2w()
 
 
 def create_batches(data: List[List[int]], labels: List[int]) -> List[List[List[int]]]:
@@ -307,8 +315,51 @@ def get_data(data_dir: str, url: str, filename: str) -> str:
 def load_wiki_dataset():
     # Load the enwik8 dataset
     train_data, val_data, test_data = enwik8_string(str(ENWIK8_PATH))
-    return train_data, val_data, test_data
+    
+    # Concatenate the datasets
+    full_data = train_data + val_data + test_data
+    tokenizer = Tokenizer(full_data)
+    
+    return train_data, val_data, test_data, tokenizer
 
+def gen_batch(data,
+              seq_len,
+              batch_size,
+              encoding,
+              seed=22,
+              replacement=True):
+    """
+    Params:
+        data: A string of text.
+        seq_len: The sequence length for each instance in the batch.
+        batch_size: The size of each batch.
+        encoding: A function to encode the text into tensors.
+        replacement: Whether to sample with replacement.
+    Yields:
+        A tuple of (X, y) tensors for each batch.
+    """
+    random.seed(seed)
 
-def tokenize_data(full_data_set):
-    pass
+    # The max slicing index
+    max_index = len(data) - (seq_len + 1)
+
+    # Ensure there are enough unique instances for the batch
+    assert batch_size <= max_index, \
+        "The batch size exceeds the number of unique instances"
+
+    while True:  # Infinite generator loop
+        if replacement:
+            indices = [random.randint(0, max_index) for _ in range(batch_size)]
+        else:
+            indices = random.sample(range(max_index), k=batch_size)
+
+        Xy = [(encoding(data[i: i + seq_len]),
+                encoding(data[i + 1: i + (seq_len + 1)]))
+                for i in indices]
+
+        # Unzip X and y
+        X, y = zip(*Xy)
+
+        # Stack tensors to create single tensor
+        yield torch.stack(X), torch.stack(y)
+

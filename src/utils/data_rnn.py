@@ -10,8 +10,24 @@ IMDB_FILE = "imdb.{}.pkl.gz"
 
 PAD, START, END, UNK = ".pad", ".start", ".end", ".unk"
 
+# Export i2w and w2i for external use
+__all__ = ['load_imdb', 'get_i2w', 'get_w2i']
+
+# Define global variables for i2w and w2i
+_i2w = None
+_w2i = None
+
+def get_i2w():
+    global _i2w
+    return _i2w
+
+def get_w2i():
+    global _w2i
+    return _w2i
+
 
 def load_imdb(final=False, val=5000, seed=0, voc=None, char=False):
+    global _i2w, _w2i
     cst = "char" if char else "word"
 
     imdb_url = IMDB_URL.format(cst)
@@ -21,15 +37,15 @@ def load_imdb(final=False, val=5000, seed=0, voc=None, char=False):
         wget.download(imdb_url)
 
     with gzip.open(imdb_file) as file:
-        sequences, labels, i2w, w2i = pickle.load(file)
+        sequences, labels, _i2w, _w2i = pickle.load(file)
 
-    if voc is not None and voc < len(i2w):
+    if voc is not None and voc < len(_i2w):
         nw_sequences = {}
 
-        i2w = i2w[:voc]
-        w2i = {w: i for i, w in enumerate(i2w)}
+        _i2w = _i2w[:voc]
+        _w2i = {w: i for i, w in enumerate(_i2w)}
 
-        mx, unk = voc, w2i[".unk"]
+        mx, unk = voc, _w2i[".unk"]
         for key, seqs in sequences.items():
             nw_sequences[key] = []
             for seq in seqs:
@@ -42,7 +58,7 @@ def load_imdb(final=False, val=5000, seed=0, voc=None, char=False):
         return (
             (sequences["train"], labels["train"]),
             (sequences["test"], labels["test"]),
-            (i2w, w2i),
+            (_i2w, _w2i),
             2,
         )
 
@@ -61,7 +77,7 @@ def load_imdb(final=False, val=5000, seed=0, voc=None, char=False):
             x_train.append(s)
             y_train.append(l)
 
-    return (x_train, y_train), (x_val, y_val), (i2w, w2i), 2
+    return (x_train, y_train), (x_val, y_val), (_i2w, _w2i), 2
 
 
 def gen_sentence(sent, g):

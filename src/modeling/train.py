@@ -1,6 +1,11 @@
 import torch  # Required for tensor operations and model training
 from typing import Callable  # For type hints like Callable
 
+try:
+    from src.modeling.models import *
+except ImportError:
+    from modeling.models import *
+
 
 def accuracy_fn(y_pred, y_true):
     """Calculates accuracy between truth labels and predictions.

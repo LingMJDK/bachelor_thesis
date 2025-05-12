@@ -14,6 +14,12 @@ from torch.utils.tensorboard import SummaryWriter
 
 import numpy as np
 
+try:
+    from src.utils import data_rnn
+    from src.utils import helper_functions
+except ImportError:
+    from utils import data_rnn
+    from utils import helper_functions
 
 def enwik8(path=None, n_train=int(90e6), n_valid=int(5e6), n_test=int(5e6)):
     """

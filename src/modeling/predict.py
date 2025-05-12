@@ -1,6 +1,5 @@
 import torch
 
-
 def generate_text(
     model, tokenizer, prompt, max_new_tokens=100, temperature=1.0, device="cpu"
 ):
