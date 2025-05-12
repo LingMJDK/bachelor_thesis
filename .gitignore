@@ -88,6 +88,7 @@ target/
 
 # Exclude virtual environment
 .venv/
+.conda/
 
 # Exclude trained models
 /models/

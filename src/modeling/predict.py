@@ -1,40 +1,45 @@
 import torch
 
 
-def test_step(model, test_data, loss_fn, accuracy_fn, device):
+def generate_text(
+    model, tokenizer, prompt, max_new_tokens=100, temperature=1.0, device="cpu"
+):
     """
-    Evaluates the model on the test dataset.
+    Generate text from an autoregressive transformer model.
     Params:
-        model: The trained model to evaluate.
-        test_data: DataLoader for the test dataset.
-        loss_fn (callable): Loss function to calculate the test loss.
-        accuracy_fn (callable): Function to calculate accuracy.
-        device (str): Device to run the evaluation on ('cpu' or 'cuda').
-
+        model: Autoregressive Transformer model (trained)
+        tokenizer: Tokenizer with tensor_encoding and tensor_decoding
+        prompt: Starting string
+        max_new_tokens: Number of tokens to generate
+        temperature: Sampling temperature (>1 = more random, <1 = more confident)
+        device: "cuda" or "cpu"
     Returns:
-        Tuple[float, float]: Average test loss and accuracy.
+        Generated string including prompt
     """
 
     model.eval()
+    model.to(device)
 
-    with torch.inference_mode():
-        test_loss, test_acc = 0, 0
-        for X, y in test_data:
-            X, y = X.to(device), y.to(device)
+    # Encode the prompt to input tensor
+    input_ids = (
+        tokenizer.tensor_encoding(prompt).unsqueeze(0).to(device)
+    )  # shape: (1, T)
 
-            # 1. Forward Pass
-            y_logits = model(X)  # Output is raw logits
-            y_preds = y_logits.argmax(dim=1)  # Turns logits into predictions
+    for _ in range(max_new_tokens):
+        # Forward pass
+        with torch.inference_mode():
+            y_logits = model(input_ids)  # shape: (1, T, vocab_size)
 
-            # 2.1 Calculate Loss and Accuracy
-            loss = loss_fn(y_logits, y)
-            acc = accuracy_fn(y_pred=y_preds, y_true=y)
-            # 2.2 Accumulate Loss and Accuracy
-            test_loss += loss.item()
-            test_acc += acc
+        # Select logits of last token in sequence
+        next_token_logits = y_logits[:, -1, :] / temperature
+        probs = torch.softmax(next_token_logits, dim=-1)
 
-        test_loss /= len(test_data)
-        test_acc /= len(test_data)
-        # print(
-        #     f"Epoch: {epoch} | Test loss: {test_loss:.4f} | Test accuracy {test_acc:.2f}%"
-        # )
+        # Sample from the distribution
+        next_token = torch.multinomial(probs, num_samples=1)
+
+        # Append prediction to input
+        input_ids = torch.cat([input_ids, next_token], dim=1)
+
+    # Decode the full sequence (including the prompt)
+    generated_text = tokenizer.tensor_decoding(input_ids[0])
+    return generated_text
