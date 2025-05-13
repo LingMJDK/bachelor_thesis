@@ -110,59 +110,45 @@ if __name__ == "__main__":
     wandb.watch(model, log="all", log_freq=10)
 
     # ─── training loop ────────────────────────────────────────────────
-from torch.cuda.amp import autocast, GradScaler
+    for epoch in range(config.epochs):
+        start = Timer()
 
-# initialize a gradient scaler for AMP (if using CUDA)
-scaler = GradScaler()
+        train_loss, train_acc = train_step(
+            model=model, train_data=train_set,
+            loss_fn=loss_fn, accuracy_fn=accuracy_fn,
+            optimizer=optimizer, epoch=epoch,
+            device=device, task="Autoregressive"
+        )
 
-for epoch in range(config.epochs):
-    start = Timer()
+        val_loss, val_acc = test_step(
+            model=model, test_data=val_set,
+            loss_fn=loss_fn, accuracy_fn=accuracy_fn,
+            epoch=epoch, device=device, task="Autoregressive"
+        )
 
-    train_loss, train_acc = train_step(
-        model=model,
-        train_data=train_set,
-        loss_fn=loss_fn,
-        accuracy_fn=accuracy_fn,
-        optimizer=optimizer,
-        device=device,
-        epoch=epoch,
-        task="Autoregressive",
-        scaler=scaler,             # pass scaler for mixed-precision
-    )
+        elapsed = Timer() - start
+        print(f"Epoch {epoch} in {elapsed:.2f}s — "
+              f"train_loss={train_loss:.4f}, train_acc={train_acc:.4f}, "
+              f"val_loss={val_loss:.4f}, val_acc={val_acc:.4f}")
 
-    val_loss, val_acc = test_step(
-        model=model,
-        test_data=val_set,
-        loss_fn=loss_fn,
-        accuracy_fn=accuracy_fn,
-        device=device,
-        epoch=epoch,
-        task="Autoregressive"
-    )
+        wandb.log({
+            "epoch":            epoch,
+            "train/loss":       train_loss,
+            "train/accuracy":   train_acc,
+            "val/loss":         val_loss,
+            "val/accuracy":     val_acc,
+            "lr":               optimizer.param_groups[0]['lr'],
+            "time/epoch_sec":   elapsed,
+        })
 
-    elapsed = Timer() - start
-    print(f"Epoch {epoch} in {elapsed:.2f}s — "
-          f"train_loss={train_loss:.4f}, train_acc={train_acc:.4f}, "
-          f"val_loss={val_loss:.4f}, val_acc={val_acc:.4f}")
+        ckpt_path = os.path.join(args.output_dir, f"checkpoint_epoch{epoch}.pt")
+        torch.save({
+            "epoch":       epoch,
+            "model_state": model.state_dict(),
+            "opt_state":   optimizer.state_dict(),
+            "config":      dict(config),
+        }, ckpt_path)
+        wandb.save(ckpt_path)
 
-    wandb.log({
-        "epoch":            epoch,
-        "train/loss":       train_loss,
-        "train/accuracy":   train_acc,
-        "val/loss":         val_loss,
-        "val/accuracy":     val_acc,
-        "lr":               optimizer.param_groups[0]['lr'],
-        "time/epoch_sec":   elapsed,
-    })
-
-    ckpt_path = os.path.join(args.output_dir, f"checkpoint_epoch{epoch}.pt")
-    torch.save({
-        "epoch":       epoch,
-        "model_state": model.state_dict(),
-        "opt_state":   optimizer.state_dict(),
-        "config":      dict(config),
-    }, ckpt_path)
-    wandb.save(ckpt_path)
-
-wandb.finish()
-print("Done.")
+    wandb.finish()
+    print("Done.")
