@@ -98,3 +98,6 @@ venv/
 
 # exclude data from source control by default
 # /data/
+
+# conda environments
+.conda/
