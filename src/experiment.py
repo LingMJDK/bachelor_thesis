@@ -86,6 +86,7 @@ if __name__ == "__main__":
     wandb.watch(model, log="all", log_freq=10)
 
     for epoch in range(config.epochs):
+        train_ds.seed = config.seed + epoch
         start = Timer()
         train_loss, train_acc = train_step(model, train_loader, loss_fn,
                                            accuracy_fn, optimizer, device,
