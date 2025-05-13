@@ -4,6 +4,8 @@ import random
 import textwrap
 from typing import List, Tuple, Generator, Dict
 import torch
+import random
+from torch.utils.data import IterableDataset
 
 try:
     from src.config import ENWIK8_PATH
@@ -363,3 +365,54 @@ def gen_batch(data,
         # Stack tensors to create single tensor
         yield torch.stack(X), torch.stack(y)
 
+
+
+
+
+class CharBatchDataset(IterableDataset):
+    def __init__(
+        self,
+        data: str,
+        encoding_fn,
+        seq_len: int,
+        batch_size: int,
+        num_batches: int,
+        seed: int = 22,
+        replacement: bool = True,
+    ):
+        super().__init__()
+        self.data = data
+        self.encode = encoding_fn
+        self.seq_len = seq_len
+        self.batch_size = batch_size
+        self.num_batches = num_batches
+        self.replacement = replacement
+        self.seed = seed
+
+        self.max_idx = len(data) - (seq_len + 1)
+        assert num_batches * batch_size < self.max_idx, (
+            "num_batches * batch_size exceeds available positions"
+        )
+
+    def __iter__(self):
+        worker_info = torch.utils.data.get_worker_info()
+        seed = self.seed + (worker_info.id if worker_info else 0)
+        rnd = random.Random(seed)
+
+        if self.replacement:
+            all_idx = (rnd.randint(0, self.max_idx) for _ in range(self.num_batches * self.batch_size))
+        else:
+            all_idx = iter(rnd.sample(range(self.max_idx), k=self.num_batches * self.batch_size))
+
+        for _ in range(self.num_batches):
+            batch_idxs = [next(all_idx) for _ in range(self.batch_size)]
+            Xs, Ys = [], []
+            for i in batch_idxs:
+                seq = self.data[i : i + self.seq_len]
+                nxt = self.data[i + 1 : i + 1 + self.seq_len]
+                Xs.append(self.encode(seq))
+                Ys.append(self.encode(nxt))
+            yield torch.stack(Xs), torch.stack(Ys)
+
+    def __len__(self):
+        return self.num_batches

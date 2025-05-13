@@ -6,22 +6,17 @@ from tqdm.auto import tqdm
 from timeit import default_timer as Timer
 import wandb
 
-try:
-    from src.dataset import load_wiki_dataset, char_batches
-    from modeling.models import AutoregressiveTransformer
-    from modeling.train import train_step, accuracy_fnV2, test_step
-    from modeling.predict import generate_text
-except ImportError:
-    from dataset import load_wiki_dataset, char_batches
-    from modeling.models import AutoregressiveTransformer
-    from modeling.train import train_step, accuracy_fnV2, test_step
-    from modeling.predict import generate_text
+from torch.utils.data import DataLoader
+from dataset import CharBatchDataset, load_wiki_dataset
+from modeling.models import AutoregressiveTransformer
+from modeling.train import train_step, accuracy_fnV2, test_step
+from modeling.predict import generate_text
 
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Train an autoregressive transformer on the Wiki dataset"
     )
-    parser.add_argument("--num-train",       type=int,   default=100,   help="Number of training batches")
+    parser.add_argument("--num-train",       type=int,   default=10,   help="Number of training batches")
     parser.add_argument("--epochs",          type=int,   default=5,     help="Number of epochs")
     parser.add_argument("--batch-size",      type=int,   default=2,     help="Batch size")
     parser.add_argument("--seq-len",         type=int,   default=256,   help="Sequence length")
@@ -38,20 +33,19 @@ def parse_args():
 if __name__ == "__main__":
     args = parse_args()
 
-    # ─── reproducibility & dirs ─────────────────────────────────────
+    # reproducibility & dirs
     torch.manual_seed(args.seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed(args.seed)
-
     os.makedirs(args.output_dir, exist_ok=True)
 
-    # ─── device setup & cuDNN tuning ─────────────────────────────────
+    # device setup & cuDNN tuning
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {device}")
     if device == "cuda":
         torch.backends.cudnn.benchmark = True
 
-    # ─── wandb init & config ─────────────────────────────────────────
+    # wandb init & config
     wandb.init(
         project="wiki-transformer",
         config={
@@ -71,27 +65,64 @@ if __name__ == "__main__":
     )
     config = wandb.config
 
-    # ─── data loading ─────────────────────────────────────────────────
+    # data loading via IterableDataset + DataLoader
     train_data, val_data, test_data, tokenizer = load_wiki_dataset()
     num_val  = int(0.2 * config.num_train)
     num_test = num_val
-    train_iter = char_batches(train_data, config.seq_len, config.batch_size,
-                              config.num_train, tokenizer.tensor_encoding,
-                              seed=config.seed, replacement=True)
-    val_iter   = char_batches(val_data,   config.seq_len, config.batch_size,
-                              num_val,        tokenizer.tensor_encoding,
-                              seed=config.seed, replacement=True)
-    test_iter  = char_batches(test_data,  config.seq_len, config.batch_size,
-                              num_test,       tokenizer.tensor_encoding,
-                              seed=config.seed, replacement=True)
 
-    train_set = list(train_iter)
-    val_set   = list(val_iter)
-    test_set  = list(test_iter)
+    train_ds = CharBatchDataset(
+        data=train_data,
+        encoding_fn=tokenizer.tensor_encoding,
+        seq_len=config.seq_len,
+        batch_size=config.batch_size,
+        num_batches=config.num_train,
+        seed=config.seed,
+        replacement=True,
+    )
+    val_ds = CharBatchDataset(
+        data=val_data,
+        encoding_fn=tokenizer.tensor_encoding,
+        seq_len=config.seq_len,
+        batch_size=config.batch_size,
+        num_batches=num_val,
+        seed=config.seed,
+        replacement=True,
+    )
+    test_ds = CharBatchDataset(
+        data=test_data,
+        encoding_fn=tokenizer.tensor_encoding,
+        seq_len=config.seq_len,
+        batch_size=config.batch_size,
+        num_batches=num_test,
+        seed=config.seed,
+        replacement=True,
+    )
 
-    print(f"Train batches: {len(train_set)}, Val: {len(val_set)}, Test: {len(test_set)}")
+    train_loader = DataLoader(
+        train_ds,
+        batch_size=None,
+        num_workers=4,
+        pin_memory=True,
+        prefetch_factor=2,
+    )
+    val_loader = DataLoader(
+        val_ds,
+        batch_size=None,
+        num_workers=2,
+        pin_memory=True,
+        prefetch_factor=2,
+    )
+    test_loader = DataLoader(
+        test_ds,
+        batch_size=None,
+        num_workers=2,
+        pin_memory=True,
+        prefetch_factor=2,
+    )
 
-    # ─── model, loss, optimizer ───────────────────────────────────────
+    print(f"Train batches: {config.num_train}, Val: {num_val}, Test: {num_test}")
+
+    # model, loss, optimizer
     model = AutoregressiveTransformer(
         vocab_size=tokenizer.get_vocab_size(),
         emb_size=config.emb_size,
@@ -109,21 +140,29 @@ if __name__ == "__main__":
 
     wandb.watch(model, log="all", log_freq=10)
 
-    # ─── training loop ────────────────────────────────────────────────
+    # training loop
     for epoch in range(config.epochs):
         start = Timer()
 
         train_loss, train_acc = train_step(
-            model=model, train_data=train_set,
-            loss_fn=loss_fn, accuracy_fn=accuracy_fn,
-            optimizer=optimizer, epoch=epoch,
-            device=device, task="Autoregressive"
+            model=model,
+            train_data=train_loader,
+            loss_fn=loss_fn,
+            accuracy_fn=accuracy_fn,
+            optimizer=optimizer,
+            device=device,
+            epoch=epoch,
+            task="Autoregressive"
         )
 
         val_loss, val_acc = test_step(
-            model=model, test_data=val_set,
-            loss_fn=loss_fn, accuracy_fn=accuracy_fn,
-            epoch=epoch, device=device, task="Autoregressive"
+            model=model,
+            test_data=val_loader,
+            loss_fn=loss_fn,
+            accuracy_fn=accuracy_fn,
+            device=device,
+            epoch=epoch,
+            task="Autoregressive"
         )
 
         elapsed = Timer() - start
@@ -140,15 +179,15 @@ if __name__ == "__main__":
             "lr":               optimizer.param_groups[0]['lr'],
             "time/epoch_sec":   elapsed,
         })
-
-        ckpt_path = os.path.join(args.output_dir, f"checkpoint_epoch{epoch}.pt")
-        torch.save({
-            "epoch":       epoch,
-            "model_state": model.state_dict(),
-            "opt_state":   optimizer.state_dict(),
-            "config":      dict(config),
-        }, ckpt_path)
-        wandb.save(ckpt_path)
+        if epoch % 4 == 0:
+            ckpt_path = os.path.join(args.output_dir, f"checkpoint_epoch{epoch}.pt")
+            torch.save({
+                "epoch":       epoch,
+                "model_state": model.state_dict(),
+                "opt_state":   optimizer.state_dict(),
+                "config":      dict(config),
+            }, ckpt_path)
+            wandb.save(ckpt_path)
 
     wandb.finish()
     print("Done.")

@@ -23,12 +23,12 @@ def parse_args():
     )
     parser.add_argument("--num-train",       type=int,   default=100,   help="Number of training batches")
     parser.add_argument("--epochs",          type=int,   default=5,     help="Number of epochs")
-    parser.add_argument("--batch-size",      type=int,   default=2,     help="Batch size")
-    parser.add_argument("--seq-len",         type=int,   default=256,   help="Sequence length")
+    parser.add_argument("--batch-size",      type=int,   default=10,     help="Batch size")
+    parser.add_argument("--seq-len",         type=int,   default=110,   help="Sequence length")
     parser.add_argument("--seed",            type=int,   default=22,    help="Random seed")
-    parser.add_argument("--emb-size",        type=int,   default=512,   help="Embedding dimension size")
-    parser.add_argument("--n-layers",        type=int,   default=6,     help="Number of transformer layers")
-    parser.add_argument("--n-heads",         type=int,   default=8,     help="Number of attention heads")
+    parser.add_argument("--emb-size",        type=int,   default=256,   help="Embedding dimension size")
+    parser.add_argument("--n-layers",        type=int,   default=4,     help="Number of transformer layers")
+    parser.add_argument("--n-heads",         type=int,   default=4,     help="Number of attention heads")
     parser.add_argument("--ff-hidden-mult",  type=int,   default=4,     help="Feedforward hidden size multiplier")
     parser.add_argument("--dropout",         type=float, default=0.1,   help="Dropout probability")
     parser.add_argument("--lr",              type=float, default=1e-4,  help="Learning rate for optimizer")
@@ -144,14 +144,15 @@ if __name__ == "__main__":
         })
 
         # ─── checkpoint ───────────
-        ckpt_path = os.path.join(args.output_dir, f"checkpoint_epoch{epoch}.pt")
-        torch.save({
-            "epoch":       epoch,
-            "model_state": model.state_dict(),
-            "opt_state":   optimizer.state_dict(),
-            "config":      dict(config),
-        }, ckpt_path)
-        wandb.save(ckpt_path)   # upload to W&B run
+        if epoch % 50 == 0:
+            ckpt_path = os.path.join(args.output_dir, f"checkpoint_epoch{epoch}.pt")
+            torch.save({
+                "epoch":       epoch,
+                "model_state": model.state_dict(),
+                "opt_state":   optimizer.state_dict(),
+                "config":      dict(config),
+            }, ckpt_path)
+            wandb.save(ckpt_path)   # upload to W&B run
 
     wandb.finish()
     print("Done.")
