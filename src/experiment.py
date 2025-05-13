@@ -28,6 +28,8 @@ from modeling.predict import generate_text
 def parse_args():
     parser = argparse.ArgumentParser(description="Train an autoregressive transformer on the Wiki dataset")
     parser.add_argument("--num-train", type=int, default=100)
+    parser.add_argument("--num-val", type=int, default=500)
+    parser.add_argument("--num-test", type=int, default=500)
     parser.add_argument("--epochs", type=int, default=5)
     parser.add_argument("--batch-size", type=int, default=10)
     parser.add_argument("--seq-len", type=int, default=110)
@@ -58,7 +60,8 @@ if __name__ == "__main__":
     from modeling.models import AutoregressiveTransformer
 
     train_data, val_data, test_data, tokenizer = load_wiki_dataset()
-    num_val = num_test = int(0.2 * config.num_train)
+    num_test = config.num_test
+    num_val = config.num_val
 
     # Create DataLoaders
     train_ds = CharBatchDataset(train_data, tokenizer.tensor_encoding,

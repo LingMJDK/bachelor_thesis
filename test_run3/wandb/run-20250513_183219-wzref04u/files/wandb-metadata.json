@@ -1,0 +1,49 @@
+{
+  "os": "Linux-5.15.167.4-microsoft-standard-WSL2-x86_64-with-glibc2.35",
+  "python": "CPython 3.12.10",
+  "startedAt": "2025-05-13T16:32:19.739366Z",
+  "args": [
+    "--num-train",
+    "4",
+    "--epochs",
+    "3",
+    "--batch-size",
+    "4",
+    "--seq-len",
+    "16",
+    "--n-heads",
+    "4",
+    "--emb-size",
+    "256",
+    "--n-layers",
+    "8",
+    "--output-dir",
+    "test_run3"
+  ],
+  "program": "/home/sephiroth/Repositories/bachelor_thesis/src/experiment.py",
+  "codePath": "src/experiment.py",
+  "git": {
+    "remote": "git@github.com:LingMJDK/bachelor_thesis.git",
+    "commit": "66a59528808a72e7fdfc3ed6764564b66affc8c2"
+  },
+  "email": "m.linger91@gmail.com",
+  "root": "test_run3",
+  "host": "HarvardMarkI",
+  "executable": "/home/sephiroth/Repositories/bachelor_thesis/venv/bin/python",
+  "codePathLocal": "src/experiment.py",
+  "cpu_count": 6,
+  "cpu_count_logical": 6,
+  "disk": {
+    "/": {
+      "total": "1081101176832",
+      "used": "16621875200"
+    }
+  },
+  "memory": {
+    "total": "7994810368"
+  },
+  "cpu": {
+    "count": 6,
+    "countLogical": 6
+  }
+}
