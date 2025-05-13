@@ -101,4 +101,4 @@ venv/
 
 # conda environments
 .conda/
-/results/
+/results/test_run3/
