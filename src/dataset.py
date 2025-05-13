@@ -6,6 +6,9 @@ from typing import List, Tuple, Generator, Dict
 import torch
 import random
 from torch.utils.data import IterableDataset
+import math
+import random
+from torch.utils.data import IterableDataset, DataLoader, get_worker_info
 
 try:
     from src.config import ENWIK8_PATH
@@ -388,24 +391,37 @@ class CharBatchDataset(IterableDataset):
         self.num_batches = num_batches
         self.replacement = replacement
         self.seed = seed
-
         self.max_idx = len(data) - (seq_len + 1)
         assert num_batches * batch_size < self.max_idx, (
             "num_batches * batch_size exceeds available positions"
         )
 
+    def __len__(self):
+        return self.num_batches
+
     def __iter__(self):
-        worker_info = torch.utils.data.get_worker_info()
-        seed = self.seed + (worker_info.id if worker_info else 0)
-        rnd = random.Random(seed)
-
-        if self.replacement:
-            all_idx = (rnd.randint(0, self.max_idx) for _ in range(self.num_batches * self.batch_size))
+        worker = get_worker_info()
+        if worker is None:
+            worker_id, num_workers = 0, 1
         else:
-            all_idx = iter(rnd.sample(range(self.max_idx), k=self.num_batches * self.batch_size))
+            worker_id, num_workers = worker.id, worker.num_workers
 
-        for _ in range(self.num_batches):
-            batch_idxs = [next(all_idx) for _ in range(self.batch_size)]
+        # Divide batches among workers
+        per_worker = int(math.ceil(self.num_batches / num_workers))
+        start = worker_id * per_worker
+        end = min(start + per_worker, self.num_batches)
+        local_num = max(0, end - start)
+
+        rnd = random.Random(self.seed + worker_id)
+        total_idx = local_num * self.batch_size
+        if self.replacement:
+            idx_iter = (rnd.randint(0, self.max_idx) for _ in range(total_idx))
+        else:
+            all_idx = rnd.sample(range(self.max_idx), k=self.num_batches * self.batch_size)
+            idx_iter = iter(all_idx[start*self.batch_size : end*self.batch_size])
+
+        for _ in range(local_num):
+            batch_idxs = [next(idx_iter) for _ in range(self.batch_size)]
             Xs, Ys = [], []
             for i in batch_idxs:
                 seq = self.data[i : i + self.seq_len]
@@ -413,6 +429,3 @@ class CharBatchDataset(IterableDataset):
                 Xs.append(self.encode(seq))
                 Ys.append(self.encode(nxt))
             yield torch.stack(Xs), torch.stack(Ys)
-
-    def __len__(self):
-        return self.num_batches

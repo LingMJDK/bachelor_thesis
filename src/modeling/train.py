@@ -1,6 +1,9 @@
 import torch  # Required for tensor operations and model training
 from typing import Callable  # For type hints like Callable
 
+
+
+
 try:
     from src.modeling.models import *
 except ImportError:
@@ -29,99 +32,55 @@ def accuracy_fnV2(y_pred, y_true):
     return (correct / total) * 100
 
 
-def train_step(
-    model, train_data, loss_fn, accuracy_fn, optimizer, device, epoch, task="unknown"
-):
-    """ """
-
-    # Set model to device and evaluation mode
-
+def train_step(model, train_data, loss_fn, accuracy_fn, optimizer, device, epoch, task="unknown"):
     model.train()
-
-    train_loss, train_acc = 0, 0
-
+    train_loss, train_acc = 0.0, 0.0
     for X, y in train_data:
-        X, y = X.to(device), y.to(device)
-
-        # 1. Forward Pass
-        y_logits = model(X)  # Output is raw logits
-        y_preds = y_logits.argmax(dim=-1)  # Turns logits into predictions
-
-        # 2.1 Calculate Loss and Accuracy
+        X = X.to(device, non_blocking=True)
+        y = y.to(device, non_blocking=True)
+        optimizer.zero_grad()
+        y_logits = model(X)
+        y_preds = y_logits.argmax(dim=-1)
         if task.lower() == "classification":
             loss = loss_fn(y_logits, y)
             acc = accuracy_fn(y_preds, y)
-
-        elif task.lower() == "autoregressive":
-            B, T, V = y_logits.shape
-            loss = loss_fn(y_logits.view(B * T, V), y.view(B * T))
-            acc = accuracy_fn(y_preds, y)
         else:
-            raise ValueError(f"""Invalid task type: {task}.
-              Choose 'classification' or 'autoregressive'.""")
-
-        # 2.2 Accumulate Loss and Accuracy
+            B, T, V = y_logits.shape
+            loss = loss_fn(y_logits.view(B*T, V), y.view(B*T))
+            acc = accuracy_fn(y_preds, y)
+        loss.backward()
+        optimizer.step()
         train_loss += loss.item()
         train_acc += acc
-
-        # 3. Optimizer zero grad
-        optimizer.zero_grad()
-
-        # 4. Loss backwards
-        loss.backward()
-
-        # 5. Step
-        optimizer.step()
-
-    train_loss /= len(train_data)
-    train_acc /= len(train_data)
-
-    print(
-        f"Epoch: {epoch} | Train Loss: {train_loss:.4f} | Train accuracy {train_acc:.2f}%"
-    )
-    
+    n = len(train_data)
+    train_loss /= n
+    train_acc  /= n
+    print(f"Epoch: {epoch} | Train Loss: {train_loss:.4f} | Train accuracy {train_acc:.2f}%")
     return train_loss, train_acc
 
 
-############################################################################
-
-
 def test_step(model, test_data, loss_fn, accuracy_fn, device, epoch, task="unknown"):
-    """ """
-    # Set model to device and evaluation mode
-
     model.eval()
-
+    test_loss, test_acc = 0.0, 0.0
     with torch.inference_mode():
-        test_loss, test_acc = 0, 0
         for X, y in test_data:
-            X, y = X.to(device), y.to(device)
-
-            # 1. Forward Pass
-            y_logits = model(X)  # Output is raw logits
-            y_preds = y_logits.argmax(dim=-1)  # Turns logits into predictions
-
+            X = X.to(device, non_blocking=True)
+            y = y.to(device, non_blocking=True)
+            y_logits = model(X)
+            y_preds = y_logits.argmax(dim=-1)
             if task.lower() == "classification":
                 loss = loss_fn(y_logits, y)
                 acc = accuracy_fn(y_preds, y)
-            elif task.lower() == "autoregressive":
-                B, T, V = y_logits.shape
-                loss = loss_fn(y_logits.view(B * T, V), y.view(B * T))
-                acc = accuracy_fn(y_preds, y)
             else:
-                raise ValueError(f"""Invalid task type: {task}.
-              Choose 'classification' or 'autoregressive'.""")
-
-            # 2.2 Accumulate Loss and Accuracy
+                B, T, V = y_logits.shape
+                loss = loss_fn(y_logits.view(B*T, V), y.view(B*T))
+                acc = accuracy_fn(y_preds, y)
             test_loss += loss.item()
-            test_acc += acc
-
-        test_loss /= len(test_data)
-        test_acc /= len(test_data)
-        print(
-            f"Epoch: {epoch} | Test loss: {test_loss:.4f} | Test accuracy {test_acc:.2f}%"
-        )
-        
+            test_acc  += acc
+    n = len(test_data)
+    test_loss /= n
+    test_acc  /= n
+    print(f"Epoch: {epoch} | Test loss: {test_loss:.4f} | Test accuracy {test_acc:.2f}%")
     return test_loss, test_acc
 
 

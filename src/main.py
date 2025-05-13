@@ -6,6 +6,7 @@ from tqdm.auto import tqdm
 from timeit import default_timer as Timer
 import wandb
 
+
 try:
     from src.dataset import load_wiki_dataset, char_batches
     from modeling.models import AutoregressiveTransformer
