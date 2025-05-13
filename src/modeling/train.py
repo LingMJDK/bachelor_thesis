@@ -79,6 +79,8 @@ def train_step(
     print(
         f"Epoch: {epoch} | Train Loss: {train_loss:.4f} | Train accuracy {train_acc:.2f}%"
     )
+    
+    return train_loss, train_acc
 
 
 ############################################################################
@@ -119,6 +121,8 @@ def test_step(model, test_data, loss_fn, accuracy_fn, device, epoch, task="unkno
         print(
             f"Epoch: {epoch} | Test loss: {test_loss:.4f} | Test accuracy {test_acc:.2f}%"
         )
+        
+    return test_loss, test_acc
 
 
 def print_train_time(start: float, end: float, device: torch.device = None):
